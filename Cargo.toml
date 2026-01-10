@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 authors = ["Lazymio <mio@lazym.io>"]
 license = "GPL-2.0-only"
+description = "Revm helpers"
 
 [dependencies]
 revm = {version = "33.1.0", features = ["dev"]}
