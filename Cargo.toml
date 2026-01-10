@@ -1,0 +1,24 @@
+[package]
+name = "revm-helpers"
+version = "0.1.0"
+edition = "2024"
+authors = ["Lazymio <mio@lazym.io>"]
+license = "GPL-2.0-only"
+
+[dependencies]
+revm = {version = "33.1.0", features = ["dev"]}
+alloy = { version = "1.1"}
+
+alloy-chains = {version = "0.2"}
+alloy-eip2930 = {version = "0.2"}
+color-eyre = {version = "0.6"}
+revm-inspectors = {version = "0.33"}
+reqwest = {version = "0.13", features = ["json"]}
+tracing = {version = "0.1"}
+serde = { version = "1.0" }
+serde_json = { version = "1.0" }
+auto_impl = {version = "1.0"}
+yansi = { version = "1.0" }
+
+[dev-dependencies]
+tokio = {version = "1.0"}
