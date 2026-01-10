@@ -1,4 +1,3 @@
-use crate::block::{empty_blockenv, testing_env};
 use alloy::{
     primitives::{Address, U256},
     sol_types::SolCall,
@@ -144,10 +143,10 @@ impl EVMCall {
                 }
                 _ => {
                     tracing::error!(output = ?output, "failed to deploy");
-                    Err(eyre!("fail to deploy though tx succeeeds").into())
+                    Err(eyre!("fail to deploy though tx succeeeds"))
                 }
             },
-            _ => Err(eyre!("Fail to deploy the initial bot contract due to: {:?}", &r).into()),
+            _ => Err(eyre!("Fail to deploy the initial bot contract due to: {:?}", &r)),
         }
     }
 }

@@ -1,7 +1,6 @@
 use alloy_chains::Chain;
 use revm::{
     context::{BlockEnv, CfgEnv},
-    database::{CacheDB, EmptyDBTyped},
     primitives::hardfork::SpecId,
 };
 

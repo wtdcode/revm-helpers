@@ -113,5 +113,5 @@ pub async fn decode_calltrace_print(
     let mut out = vec![];
     let mut writer = TraceWriter::new(&mut out);
     writer.write_arena(&trace).unwrap();
-    Ok(String::from_utf8(out).map_err(|_| eyre!("trace has non-utf8"))?)
+    String::from_utf8(out).map_err(|_| eyre!("trace has non-utf8"))
 }
