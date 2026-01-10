@@ -8,7 +8,7 @@ use revm::{
     Context, Database, DatabaseCommit, DatabaseRef, ExecuteEvm, Inspector, MainBuilder,
     MainContext,
     context::{
-        BlockEnv, CfgEnv, ContextTr, JournalTr, TransactionType, TxEnv,
+        BlockEnv, CfgEnv, TransactionType, TxEnv,
         result::{EVMError, ExecResultAndState, ExecutionResult, Output},
         tx::TxEnvBuilder,
     },
