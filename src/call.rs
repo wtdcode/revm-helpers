@@ -40,12 +40,17 @@ impl EVMCall {
         self
     }
 
+    pub fn gas_limit(mut self, limit: u64) -> Self {
+        self.tx.gas_limit = limit;
+        self
+    }
+
     pub fn call<T>(
         self,
         db: T,
     ) -> Result<ExecResultAndState<ExecutionResult>, EVMError<<T as Database>::Error>>
     where
-        T: DatabaseCommit + Database + DatabaseRef,
+        T: Database,
     {
         let context = Context::mainnet()
             .with_db(db)
@@ -63,7 +68,7 @@ impl EVMCall {
         insp: INSP,
     ) -> Result<ExecResultAndState<ExecutionResult>, EVMError<<T as Database>::Error>>
     where
-        T: DatabaseCommit + Database + DatabaseRef,
+        T: Database,
         INSP: Inspector<Context<BlockEnv, TxEnv, CfgEnv, T>, EthInterpreter>,
     {
         let context = Context::mainnet()
@@ -85,7 +90,7 @@ impl EVMCall {
         EVMError<<T as Database>::Error>,
     >
     where
-        T: DatabaseCommit + Database + DatabaseRef,
+        T: Database,
         INSP: Inspector<Context<BlockEnv, TxEnv, CfgEnv, T>, EthInterpreter>,
     {
         let trace = TracingInspector::new(TracingInspectorConfig::all());
@@ -103,7 +108,7 @@ impl EVMCall {
         EVMError<<T as Database>::Error>,
     >
     where
-        T: DatabaseCommit + Database + DatabaseRef,
+        T: Database,
     {
         let mut insp = TracingInspector::new(TracingInspectorConfig::all());
         let result = self.inspect(db, &mut insp)?;
@@ -117,7 +122,7 @@ impl EVMCall {
         target: Option<Address>,
     ) -> Result<Address, color_eyre::Report>
     where
-        T: DatabaseCommit + Database + DatabaseRef,
+        T: DatabaseCommit + Database,
         color_eyre::Report: From<<T as Database>::Error>,
     {
         let mut r = self.call(&mut db).map_err(|e| eyre!("deploy err {}", e))?;
@@ -146,7 +151,10 @@ impl EVMCall {
                     Err(eyre!("fail to deploy though tx succeeeds"))
                 }
             },
-            _ => Err(eyre!("Fail to deploy the initial bot contract due to: {:?}", &r)),
+            _ => Err(eyre!(
+                "Fail to deploy the initial bot contract due to: {:?}",
+                &r
+            )),
         }
     }
 }

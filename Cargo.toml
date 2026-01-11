@@ -20,6 +20,7 @@ serde = { version = "1.0" }
 serde_json = { version = "1.0" }
 auto_impl = {version = "1.0"}
 yansi = { version = "1.0" }
+fast_rands = "0.15.4"
 
 [dev-dependencies]
 tokio = {version = "1.0"}
