@@ -17,7 +17,7 @@ use revm::{
 use revm::{inspector::InspectEvm, primitives::TxKind};
 use revm_inspectors::tracing::{CallTraceArena, TracingInspector, TracingInspectorConfig};
 
-use crate::block::testing_env;
+use crate::{block::testing_env, trace::EVMTrace};
 
 #[derive(Debug, Default, Clone)]
 pub struct EVMCall {
@@ -114,17 +114,14 @@ impl EVMCall {
     pub fn trace<T>(
         self,
         db: T,
-    ) -> Result<
-        (ExecResultAndState<ExecutionResult>, CallTraceArena),
-        EVMError<<T as Database>::Error>,
-    >
+    ) -> Result<(ExecResultAndState<ExecutionResult>, EVMTrace), EVMError<<T as Database>::Error>>
     where
         T: Database,
     {
         let mut insp = TracingInspector::new(TracingInspectorConfig::all());
         let result = self.inspect(db, &mut insp)?;
-        let traces = insp.into_traces();
-        Ok((result, traces))
+        let trace = insp.into_traces();
+        Ok((result, EVMTrace { trace }))
     }
 
     pub fn deploy<T>(
