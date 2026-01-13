@@ -17,6 +17,8 @@ use revm::{
 use revm::{inspector::InspectEvm, primitives::TxKind};
 use revm_inspectors::tracing::{CallTraceArena, TracingInspector, TracingInspectorConfig};
 
+use crate::block::testing_env;
+
 #[derive(Debug, Default, Clone)]
 pub struct EVMCall {
     pub tx: TxEnv,
@@ -38,6 +40,15 @@ impl EVMCall {
     pub fn cfg(mut self, cfg: CfgEnv) -> Self {
         self.cfg = cfg;
         self
+    }
+
+    pub fn testing(mut self, chain: Chain) -> Self {
+        self.cfg = testing_env(chain);
+        self
+    }
+
+    pub fn testing_main(mut self) -> Self {
+        self.testing(Chain::mainnet())
     }
 
     pub fn gas_limit(mut self, limit: u64) -> Self {
