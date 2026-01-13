@@ -57,7 +57,7 @@ impl EVMTrace {
         client: P,
     ) -> Result<(), color_eyre::Report> {
         for node in calls.nodes_mut() {
-            if node.trace.data.len() > 4 {
+            if node.trace.data.len() >= 4 {
                 let selector = Selector::from_slice(&node.trace.data[0..4]);
                 let funcs = client.function_signatures(selector).await?;
                 node.trace.decoded = Some(Box::new(DecodedCallTrace {
