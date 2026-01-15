@@ -47,7 +47,7 @@ impl EVMCall {
         self
     }
 
-    pub fn testing_main(mut self) -> Self {
+    pub fn testing_main(self) -> Self {
         self.testing(Chain::mainnet())
     }
 
@@ -189,6 +189,13 @@ impl EVMTestingTxBuilder {
     }
     pub fn mainnet(self) -> Self {
         self.chain(Chain::mainnet())
+    }
+    pub fn nonce_from_db<DB: DatabaseRef>(mut self, db: DB) -> Result<Self, DB::Error> {
+        self.nonce = db
+            .basic_ref(self.caller)?
+            .map(|v| v.nonce)
+            .unwrap_or_default();
+        Ok(self)
     }
     pub fn build_deploy(&self, code_and_args: Vec<u8>) -> EVMCall {
         let tx = TxEnvBuilder::new()
