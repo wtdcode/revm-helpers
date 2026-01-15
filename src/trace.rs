@@ -31,6 +31,7 @@ fn decode_return_data(trace: &CallTrace) -> Option<String> {
         .then(|| decode_revert(&trace.output).unwrap_or(alloy::hex::encode(&trace.output)))
 }
 
+#[derive(Debug, Clone)]
 pub struct EVMTrace {
     pub trace: CallTraceArena,
 }
