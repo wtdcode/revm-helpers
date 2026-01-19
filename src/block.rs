@@ -43,7 +43,11 @@ where
     env.caller = tx.signer();
     env.nonce = tx.nonce();
     env.gas_limit = tx.gas_limit();
-    env.gas_price = tx.gas_price().unwrap_or_default();
+    env.gas_price = if tx.is_legacy() {
+        tx.gas_price().unwrap_or_default()
+    } else {
+        tx.max_fee_per_gas()
+    };
     env.gas_priority_fee = tx.max_priority_fee_per_gas();
     env.max_fee_per_blob_gas = tx.max_fee_per_blob_gas().unwrap_or_default();
     env.data = tx.input().clone();
