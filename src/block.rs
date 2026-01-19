@@ -1,7 +1,4 @@
-use alloy::{
-    consensus::transaction::Recovered,
-    network::{TransactionResponse, primitives::HeaderResponse},
-};
+use alloy::{consensus::transaction::Recovered, network::primitives::HeaderResponse};
 use alloy_chains::Chain;
 use revm::{
     context::{BlockEnv, CfgEnv, TxEnv},
@@ -38,7 +35,7 @@ where
     env
 }
 
-pub fn tx_env_from_rpc<T>(tx: &Recovered<T>) -> TxEnv
+pub fn tx_env_from_rpc<T>(tx: Recovered<T>) -> TxEnv
 where
     T: alloy::consensus::Transaction,
 {
