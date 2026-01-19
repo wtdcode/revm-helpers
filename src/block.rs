@@ -35,7 +35,7 @@ where
     env
 }
 
-pub fn tx_env_from_rpc<T>(tx: Recovered<T>) -> TxEnv
+pub fn tx_env_from_rpc<T>(tx: &Recovered<T>) -> TxEnv
 where
     T: alloy::consensus::Transaction,
 {
