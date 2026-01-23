@@ -112,6 +112,55 @@ alloy::sol!(
     }
 );
 
+pub fn detect_account_balance_of_slot(account: Address, code: &[u8]) -> Option<U256> {
+    let (random_source_address, random_target_address, mut db) = prepare_env(code)?;
+    let call = EVMTestingTxBuilder::default()
+        .caller(random_source_address)
+        .mainnet()
+        .nonce(0)
+        .build_sol_call(
+            random_target_address,
+            ERC20::balanceOfCall { owner: account },
+            U256::ZERO,
+        )
+        .gas_limit(524280)
+        .call(&mut db);
+    let Ok(result) = call else {
+        return None;
+    };
+
+    let value = ERC20::balanceOfCall::abi_decode_returns(result.result.output()?).ok()?;
+    let rand_db = db.db.into_inner();
+
+    let balance_slot = rand_db.storages_reverse_mapping.get(&value).map(|v| v.1)?;
+
+    // try set and check again
+    let (random_source_address, random_target_address, mut db) = prepare_env(code)?;
+    let value_set = random_u256(&mut fast_rands::RomuDuoJrRand::new());
+    db.insert_account_storage(random_target_address, balance_slot, value_set).ok()?;
+
+    let call = EVMTestingTxBuilder::default()
+        .caller(random_source_address)
+        .mainnet()
+        .nonce(0)
+        .build_sol_call(
+            random_target_address,
+            ERC20::balanceOfCall { owner: account },
+            U256::ZERO,
+        )
+        .gas_limit(524280)
+        .call(&mut db);
+    let Ok(result) = call else {
+        return None;
+    };
+    let value = ERC20::balanceOfCall::abi_decode_returns(result.result.output()?).ok()?;
+    if value_set == value {
+        Some(balance_slot)
+    } else {
+        None
+    }
+}
+
 pub fn detect_balance_of_slot(code: &[u8]) -> Option<U256> {
     let (random_source_address, random_target_address, mut db) = prepare_env(code)?;
     let call = EVMTestingTxBuilder::default()
@@ -181,9 +230,10 @@ mod test {
             }
         };
     }
-    use revm::primitives::{B256, keccak256};
+    use alloy::uint;
+    use revm::primitives::{B256, address, keccak256};
 
-    use crate::proxy::{detect_balance_of_slot, detect_proxy_slot};
+    use crate::proxy::{detect_account_balance_of_slot, detect_balance_of_slot, detect_proxy_slot};
 
     #[test]
     fn test_usdc() {
@@ -202,6 +252,16 @@ mod test {
         );
         let balanceof_slot = detect_balance_of_slot(&usdc_impl).unwrap();
         assert_eq!(balanceof_slot, alloy::primitives::uint!(0x9_U256));
+    }
+
+    #[test]
+    fn test_vyper() {
+        let code = alloy::hex::decode(include_str!("codes/0xf939e0a03fb07f59a73314e73794be0e57ac1b4e")).unwrap();
+        let balance_slot = detect_account_balance_of_slot(address!(
+            "0xf6f1fE2C6FDC68EC3731Eb4A90fCb91D987486E9"
+        ), &code).unwrap();
+        let expected = uint!(0x26f45eb385cd8316267595472e71ba7da7e8bafe0511964afa8457d6f8b20e2f_U256);
+        assert_eq!(balance_slot, expected);
     }
 
     test_token_slot!(
