@@ -3417,7 +3417,7 @@ dependencies = [
 
 [[package]]
 name = "revm-helpers"
-version = "0.3.7"
+version = "0.4.0"
 dependencies = [
  "alloy",
  "alloy-chains",
