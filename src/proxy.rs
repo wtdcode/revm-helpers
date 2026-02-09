@@ -137,7 +137,8 @@ pub fn detect_account_balance_of_slot(account: Address, code: &[u8]) -> Option<U
     // try set and check again
     let (random_source_address, random_target_address, mut db) = prepare_env(code)?;
     let value_set = random_u256(&mut fast_rands::RomuDuoJrRand::new());
-    db.insert_account_storage(random_target_address, balance_slot, value_set).ok()?;
+    db.insert_account_storage(random_target_address, balance_slot, value_set)
+        .ok()?;
 
     let call = EVMTestingTxBuilder::default()
         .caller(random_source_address)
@@ -231,7 +232,7 @@ mod test {
         };
     }
     use alloy::uint;
-    use revm::primitives::{B256, address, keccak256};
+    use revm::primitives::{B256, address, b256, keccak256};
 
     use crate::proxy::{detect_account_balance_of_slot, detect_balance_of_slot, detect_proxy_slot};
 
@@ -255,12 +256,37 @@ mod test {
     }
 
     #[test]
+    fn test_paxg() {
+        let paxg_proxy = alloy::hex::decode(include_str!(
+            "codes/0x45804880De22913dAFE09f4980848ECE6EcbAf78"
+        ))
+        .unwrap();
+        let paxg_impl = alloy::hex::decode(include_str!(
+            "codes/0x74271f2282ed7ee35c166122a60c9830354be42a"
+        ))
+        .unwrap();
+        let proxy_slot = detect_proxy_slot(&paxg_proxy).unwrap();
+        assert_eq!(
+            B256::from_slice(&proxy_slot.to_be_bytes_vec()),
+            b256!("0x7050c9e0f4ca769c69bd3a8ef740bc37934f8e2c036e5a723fd8ee048ed3f8c3")
+        );
+        let balanceof_slot = detect_balance_of_slot(&paxg_impl).unwrap();
+        assert_eq!(balanceof_slot, alloy::primitives::uint!(0x1_U256));
+    }
+
+    #[test]
     fn test_vyper() {
-        let code = alloy::hex::decode(include_str!("codes/0xf939e0a03fb07f59a73314e73794be0e57ac1b4e")).unwrap();
-        let balance_slot = detect_account_balance_of_slot(address!(
-            "0xf6f1fE2C6FDC68EC3731Eb4A90fCb91D987486E9"
-        ), &code).unwrap();
-        let expected = uint!(0x26f45eb385cd8316267595472e71ba7da7e8bafe0511964afa8457d6f8b20e2f_U256);
+        let code = alloy::hex::decode(include_str!(
+            "codes/0xf939e0a03fb07f59a73314e73794be0e57ac1b4e"
+        ))
+        .unwrap();
+        let balance_slot = detect_account_balance_of_slot(
+            address!("0xf6f1fE2C6FDC68EC3731Eb4A90fCb91D987486E9"),
+            &code,
+        )
+        .unwrap();
+        let expected =
+            uint!(0x26f45eb385cd8316267595472e71ba7da7e8bafe0511964afa8457d6f8b20e2f_U256);
         assert_eq!(balance_slot, expected);
     }
 
