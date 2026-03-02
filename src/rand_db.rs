@@ -7,8 +7,18 @@ use revm::{
     state::{AccountInfo, Bytecode},
 };
 
+// Keep high bits clear to fit into most cases
+pub fn random_low_storage<R: Rand>(rng: &mut R) -> U256 {
+    let val = rng.next();
+    U256::from_be_bytes(
+        Address::from_word(keccak256(val.to_be_bytes()))
+            .into_word()
+            .0,
+    )
+}
+
 pub struct RandDBInner {
-    rand: fast_rands::RomuDuoJrRand,
+    pub rand: fast_rands::RomuDuoJrRand,
     pub storages: BTreeMap<Address, BTreeMap<U256, U256>>,
     pub storages_reverse_mapping: BTreeMap<U256, (Address, U256)>,
 }
@@ -53,12 +63,7 @@ impl DatabaseRef for RandDB {
             .or_default()
             .entry(index)
             .or_insert_with(|| {
-                let val = inner_mut.rand.next();
-                let next_value = U256::from_be_bytes(
-                    Address::from_word(keccak256(val.to_be_bytes()))
-                        .into_word()
-                        .0,
-                );
+                let next_value = random_low_storage(&mut inner_mut.rand);
                 inner_mut
                     .storages_reverse_mapping
                     .insert(next_value, (address, index));

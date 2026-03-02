@@ -11,7 +11,10 @@ use revm::{
     state::{AccountInfo, Bytecode},
 };
 
-use crate::{call::EVMTestingTxBuilder, rand_db::RandDB};
+use crate::{
+    call::EVMTestingTxBuilder,
+    rand_db::{RandDB, random_low_storage},
+};
 
 pub struct ProxyInspector {
     storage_address: Address,
@@ -130,13 +133,13 @@ pub fn detect_account_balance_of_slot(account: Address, code: &[u8]) -> Option<U
     };
 
     let value = ERC20::balanceOfCall::abi_decode_returns(result.result.output()?).ok()?;
-    let rand_db = db.db.into_inner();
+    let mut rand_db = db.db.into_inner();
 
     let balance_slot = rand_db.storages_reverse_mapping.get(&value).map(|v| v.1)?;
 
     // try set and check again
     let (random_source_address, random_target_address, mut db) = prepare_env(code)?;
-    let value_set = random_u256(&mut fast_rands::RomuDuoJrRand::new());
+    let value_set = random_low_storage(&mut rand_db.rand);
     db.insert_account_storage(random_target_address, balance_slot, value_set)
         .ok()?;
 
@@ -232,9 +235,37 @@ mod test {
         };
     }
     use alloy::uint;
-    use revm::primitives::{B256, address, b256, keccak256};
+    use fast_rands::Rand;
+    use revm::primitives::{Address, B256, U256, address, b256, keccak256};
 
     use crate::proxy::{detect_account_balance_of_slot, detect_balance_of_slot, detect_proxy_slot};
+
+    #[test]
+    fn test_usdc_account_balance_of() {
+        let usdc_proxy = alloy::hex::decode(include_str!(
+            "codes/0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48"
+        ))
+        .unwrap();
+        let usdc_impl = alloy::hex::decode(include_str!(
+            "codes/0x43506849d7c04f9138d1a2050bbf3a0c054402dd"
+        ))
+        .unwrap();
+        let proxy_slot = detect_proxy_slot(&usdc_proxy).unwrap();
+        assert_eq!(
+            B256::from_slice(&proxy_slot.to_be_bytes_vec()),
+            keccak256(b"org.zeppelinos.proxy.implementation")
+        );
+        let balanceof_slot = detect_account_balance_of_slot(
+            address!("0xeE21222E88a745f1FF89D4AC69a77CEcb7974eBb"),
+            &usdc_impl,
+        );
+        assert_eq!(
+            balanceof_slot,
+            Some(uint!(
+                26844865903416581458858788339750883127623690146227240090174371479474754231843_U256
+            ))
+        );
+    }
 
     #[test]
     fn test_usdc() {
