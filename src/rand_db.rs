@@ -31,7 +31,7 @@ impl RandDB {
     pub fn new(rand: fast_rands::RomuDuoJrRand) -> Self {
         Self {
             inner: RefCell::new(RandDBInner {
-                rand: rand,
+                rand,
                 storages: BTreeMap::new(),
                 storages_reverse_mapping: BTreeMap::new(),
             }),

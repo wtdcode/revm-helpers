@@ -59,7 +59,7 @@ where
     env.chain_id = tx.chain_id();
     env.tx_type = tx.ty();
     env.value = tx.value();
-    env.access_list = tx.access_list().map(|v| v.clone()).unwrap_or_default();
+    env.access_list = tx.access_list().cloned().unwrap_or_default();
     env.authorization_list = tx
         .authorization_list()
         .map(|v| v.iter().map(|v| Err(v.clone()).into()).collect())

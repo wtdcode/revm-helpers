@@ -60,7 +60,7 @@ pub(crate) fn random_u256<R: fast_rands::Rand>(rand: &mut R) -> U256 {
 }
 
 pub(crate) fn random_b256<R: fast_rands::Rand>(rand: &mut R) -> B256 {
-    B256::from_slice(&random_u256(rand).as_le_slice())
+    B256::from_slice(random_u256(rand).as_le_slice())
 }
 
 fn prepare_env(code: &[u8]) -> Option<(Address, Address, CacheDB<RandDB>)> {
