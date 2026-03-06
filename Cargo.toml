@@ -1,6 +1,6 @@
 [package]
 name = "revm-helpers"
-version = "0.4.1"
+version = "0.4.2"
 edition = "2024"
 authors = ["Lazymio <mio@lazym.io>"]
 license = "GPL-2.0-only"
@@ -8,7 +8,7 @@ description = "Revm helpers"
 
 [dependencies]
 revm = {version = "33.1.0", features = ["dev"]}
-alloy = { version = "1.1"}
+alloy = { version = "1"}
 
 alloy-chains = {version = "0.2"}
 alloy-eip2930 = {version = "0.2"}
