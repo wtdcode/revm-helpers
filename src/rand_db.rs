@@ -3,7 +3,7 @@ use std::{cell::RefCell, collections::BTreeMap, convert::Infallible, ops::DerefM
 use fast_rands::Rand;
 use revm::{
     Database, DatabaseRef,
-    primitives::{Address, B256, StorageKey, StorageValue, U256, keccak256},
+    primitives::{Address, B256, StorageKey, StorageValue, U256},
     state::{AccountInfo, Bytecode},
 };
 
