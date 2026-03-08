@@ -10,11 +10,7 @@ use revm::{
 // Keep high bits clear to fit into most cases
 pub fn random_low_storage<R: Rand>(rng: &mut R) -> U256 {
     let val = rng.next();
-    U256::from_be_bytes(
-        Address::from_word(keccak256(val.to_be_bytes()))
-            .into_word()
-            .0,
-    )
+    U256::from(val)
 }
 
 pub struct RandDBInner {

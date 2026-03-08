@@ -321,6 +321,23 @@ mod test {
         assert_eq!(balance_slot, expected);
     }
 
+    #[test]
+    fn test_uni() {
+        let code = alloy::hex::decode(include_str!(
+            "codes/0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"
+        ))
+        .unwrap();
+        let balance_slot = detect_account_balance_of_slot(
+            address!("0x1f9840a85d5aF5bf1D1762F925BDADdC4201F984"),
+            &code,
+        )
+        .unwrap();
+        let expected = uint!(
+            55561402736569575101087086774556051094108371327836379602443489089635694777977_U256
+        );
+        assert_eq!(balance_slot, expected);
+    }
+
     test_token_slot!(
         test_usdt,
         "0xdac17f958d2ee523a2206206994597c13d831ec7",
