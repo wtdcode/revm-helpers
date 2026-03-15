@@ -3,17 +3,18 @@ use alloy::{
     sol_types::SolCall,
 };
 use revm::{
-    Inspector,
-    context::ContextTr,
+    Database, DatabaseRef, Inspector,
+    context::{BlockEnv, ContextTr},
     database::CacheDB,
     interpreter::{CallInputs, CallOutcome, CallScheme, Gas, InstructionResult, InterpreterResult},
     primitives::{B256, keccak256},
     state::{AccountInfo, Bytecode},
 };
+use tracing::instrument;
 
 use crate::{
     call::EVMTestingTxBuilder,
-    rand_db::{RandDB, random_low_storage},
+    rand_db::{LogDB, RandDB, StorageAccess, random_low_storage},
 };
 
 pub struct ProxyInspector {
@@ -115,6 +116,88 @@ alloy::sol!(
     }
 );
 
+fn call_balance_of_db<DB: Database>(
+    db: &mut DB,
+    caller: Address,
+    account: Address,
+    token: Address,
+    block: BlockEnv,
+) -> Option<U256> {
+    let call = EVMTestingTxBuilder::default()
+        .caller(caller)
+        .build_sol_call(token, ERC20::balanceOfCall { owner: account }, U256::ZERO)
+        .block(block)
+        .testing_main()
+        .gas_limit(524280)
+        .call(db);
+    let result = match call {
+        Ok(result) => result,
+        Err(e) => {
+            tracing::debug!("failed to call due to {}", e);
+            return None;
+        }
+    };
+
+    tracing::debug!(
+        "Result is {:?}, length is {:?}",
+        &result.result,
+        result.result.output().map(|v| v.len())
+    );
+    ERC20::balanceOfCall::abi_decode_returns(result.result.output()?).ok()
+}
+
+fn choose_candidate_value<R: fast_rands::Rand>(rand: &mut R, access: StorageAccess) -> U256 {
+    loop {
+        let value = random_low_storage(rand);
+        if value != access.value {
+            return value;
+        }
+    }
+}
+
+#[instrument(name = "detect_slot", skip(db, block))]
+pub fn detect_account_balance_of_slot_db<DB: Database + DatabaseRef>(
+    account: Address,
+    token: Address,
+    block: BlockEnv,
+    db: DB,
+) -> Option<U256> {
+    let mut rand = fast_rands::RomuDuoJrRand::new();
+    let random_source_address = Address::from_word(random_b256(&mut rand));
+    let mut db = LogDB::new(db);
+    let _initial_value = call_balance_of_db(
+        &mut db,
+        random_source_address,
+        account,
+        token,
+        block.clone(),
+    )?;
+    let (db, storage_accesses) = db.into_parts();
+
+    for access in storage_accesses.into_iter().rev() {
+        let value_set = choose_candidate_value(&mut rand, access);
+        let mut replay_db = CacheDB::new(&db);
+        if let Err(e) = replay_db.insert_account_storage(access.address, access.index, value_set) {
+            tracing::debug!("fail to insert db due to {}", e);
+            continue;
+        }
+
+        let value = call_balance_of_db(
+            &mut replay_db,
+            random_source_address,
+            account,
+            token,
+            block.clone(),
+        );
+
+        if value == Some(value_set) {
+            return Some(access.index);
+        }
+    }
+
+    None
+}
+
 pub fn detect_account_balance_of_slot(account: Address, code: &[u8]) -> Option<U256> {
     let (random_source_address, random_target_address, mut db) = prepare_env(code)?;
     let call = EVMTestingTxBuilder::default()
@@ -134,7 +217,6 @@ pub fn detect_account_balance_of_slot(account: Address, code: &[u8]) -> Option<U
 
     let value = ERC20::balanceOfCall::abi_decode_returns(result.result.output()?).ok()?;
     let mut rand_db = db.db.into_inner();
-
     let balance_slot = rand_db.storages_reverse_mapping.get(&value).map(|v| v.1)?;
 
     // try set and check again
@@ -234,11 +316,23 @@ mod test {
             }
         };
     }
-    use alloy::uint;
-    use fast_rands::Rand;
-    use revm::primitives::{Address, B256, U256, address, b256, keccak256};
+    use alloy::{
+        network::BlockResponse,
+        providers::{Provider, ProviderBuilder},
+        uint,
+    };
+    use revm::{
+        database::{AlloyDB, CacheDB, WrapDatabaseAsync},
+        primitives::{B256, address, b256, keccak256},
+    };
 
-    use crate::proxy::{detect_account_balance_of_slot, detect_balance_of_slot, detect_proxy_slot};
+    use crate::{
+        block::block_env_from_rpc,
+        proxy::{
+            detect_account_balance_of_slot, detect_account_balance_of_slot_db,
+            detect_balance_of_slot, detect_proxy_slot,
+        },
+    };
 
     #[test]
     fn test_usdc_account_balance_of() {
@@ -319,6 +413,53 @@ mod test {
         let expected =
             uint!(0x26f45eb385cd8316267595472e71ba7da7e8bafe0511964afa8457d6f8b20e2f_U256);
         assert_eq!(balance_slot, expected);
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn test_wlfi() {
+        let sub = tracing_subscriber::FmtSubscriber::builder()
+            .with_env_filter(
+                tracing_subscriber::EnvFilter::builder()
+                    .with_default_directive(tracing::Level::DEBUG.into())
+                    .from_env()
+                    .expect("env contains non-utf8"),
+            )
+            .finish();
+        tracing::subscriber::set_global_default(sub).unwrap();
+        let rpc =
+            std::env::var("ETH_RPC_URL").unwrap_or_else(|_| "http://10.96.179.48:8565".to_string());
+        let rpc = ProviderBuilder::new().connect(&rpc).await.unwrap();
+        let number = rpc.get_block_number().await.unwrap();
+        let block = block_env_from_rpc(
+            rpc.get_block_by_number(number.into())
+                .await
+                .unwrap()
+                .unwrap()
+                .header(),
+        );
+        let db = CacheDB::new(WrapDatabaseAsync::new(AlloyDB::new(rpc, number.into())).unwrap());
+        let wlfi_proxy = alloy::hex::decode(include_str!(
+            "codes/0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6"
+        ))
+        .unwrap();
+        let proxy_slot = detect_proxy_slot(&wlfi_proxy).unwrap();
+        assert_eq!(
+            B256::from_slice(&proxy_slot.to_be_bytes_vec()),
+            b256!("0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc")
+        );
+        let balanceof_slot = detect_account_balance_of_slot_db(
+            address!("0xeE21222E88a745f1FF89D4AC69a77CEcb7974eBb"),
+            address!("0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6"),
+            block,
+            db,
+        )
+        .unwrap();
+        assert_eq!(
+            balanceof_slot,
+            alloy::primitives::uint!(
+                26383648194240856301554830195144840311273963909714824038045424366773278612897_U256
+            )
+        );
     }
 
     #[test]

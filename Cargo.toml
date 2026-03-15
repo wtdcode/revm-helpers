@@ -7,7 +7,7 @@ license = "GPL-2.0-only"
 description = "Revm helpers"
 
 [dependencies]
-revm = { version = "33.1.0", features = ["dev"] }
+revm = { version = "33.1.0", features = ["dev", "alloydb", "asyncdb"] }
 alloy = { version = "1" }
 
 alloy-chains = { version = "0.2" }
@@ -23,4 +23,5 @@ yansi = { version = "1.0" }
 fast_rands = "0.15.4"
 
 [dev-dependencies]
-tokio = { version = "1.0" }
+tokio = { version = "1.0", features = ["full"]}
+tracing-subscriber = {version = "0.3.22", features = ["env-filter"]}
