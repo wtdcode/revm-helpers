@@ -116,6 +116,21 @@ alloy::sol!(
     }
 );
 
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum BalanceSlotMatch {
+    Exact(U256),
+    Fuzzy(Vec<U256>),
+}
+
+impl BalanceSlotMatch {
+    pub fn best_match(&self) -> U256 {
+        match self {
+            Self::Exact(v) => *v,
+            Self::Fuzzy(v) => *v.first().unwrap(),
+        }
+    }
+}
+
 fn call_balance_of_db<DB: Database>(
     db: &mut DB,
     caller: Address,
@@ -155,24 +170,22 @@ fn choose_candidate_value<R: fast_rands::Rand>(rand: &mut R, access: StorageAcce
     }
 }
 
+fn distance_between(lhs: U256, rhs: U256) -> U256 {
+    if lhs >= rhs { lhs - rhs } else { rhs - lhs }
+}
+
 #[instrument(name = "detect_slot", skip(db, block))]
 pub fn detect_account_balance_of_slot_db<DB: Database + DatabaseRef>(
     account: Address,
     token: Address,
     block: BlockEnv,
     db: DB,
-) -> Option<U256> {
+) -> Option<BalanceSlotMatch> {
     let mut rand = fast_rands::RomuDuoJrRand::new();
-    let random_source_address = Address::from_word(random_b256(&mut rand));
     let mut db = LogDB::new(db);
-    let initial_value = call_balance_of_db(
-        &mut db,
-        random_source_address,
-        account,
-        token,
-        block.clone(),
-    )?;
+    let initial_value = call_balance_of_db(&mut db, account, account, token, block.clone())?;
     let (db, storage_accesses) = db.into_parts();
+    let mut fuzzy_matches: Vec<(U256, U256)> = Vec::new();
 
     for access in storage_accesses.into_iter().rev() {
         let value_set = choose_candidate_value(&mut rand, access);
@@ -182,20 +195,48 @@ pub fn detect_account_balance_of_slot_db<DB: Database + DatabaseRef>(
             continue;
         }
 
-        let value = call_balance_of_db(
-            &mut replay_db,
-            random_source_address,
-            account,
-            token,
-            block.clone(),
+        let value = call_balance_of_db(&mut replay_db, account, account, token, block.clone());
+
+        tracing::debug!(
+            "attemp on slot {} for value {} -> {} and get {:?}, initial is {}",
+            access.index,
+            access.value,
+            value_set,
+            value,
+            initial_value
         );
 
-        if value.is_some() && value != Some(initial_value) {
-            return Some(access.index);
+        let Some(value) = value else {
+            continue;
+        };
+
+        if value == value_set {
+            return Some(BalanceSlotMatch::Exact(access.index));
+        }
+
+        if value != initial_value {
+            let distance = distance_between(value, initial_value);
+            if let Some((_, current)) = fuzzy_matches
+                .iter_mut()
+                .find(|(slot, _)| *slot == access.index)
+            {
+                if distance < *current {
+                    *current = distance;
+                }
+            } else {
+                fuzzy_matches.push((access.index, distance));
+            }
         }
     }
 
-    None
+    if fuzzy_matches.is_empty() {
+        None
+    } else {
+        fuzzy_matches.sort_by_key(|(_, distance)| *distance);
+        Some(BalanceSlotMatch::Fuzzy(
+            fuzzy_matches.into_iter().map(|(slot, _)| slot).collect(),
+        ))
+    }
 }
 
 pub fn detect_account_balance_of_slot(account: Address, code: &[u8]) -> Option<U256> {
@@ -316,6 +357,8 @@ mod test {
             }
         };
     }
+    use std::sync::LazyLock;
+
     use alloy::{
         network::BlockResponse,
         providers::{Provider, ProviderBuilder},
@@ -326,10 +369,25 @@ mod test {
         primitives::{B256, address, b256, keccak256},
     };
 
+    fn setup() {
+        static _LOCK: LazyLock<()> = LazyLock::new(|| {
+            let sub = tracing_subscriber::FmtSubscriber::builder()
+                .with_env_filter(
+                    tracing_subscriber::EnvFilter::builder()
+                        .with_default_directive(tracing::Level::INFO.into())
+                        .from_env()
+                        .expect("env contains non-utf8"),
+                )
+                .finish();
+            tracing::subscriber::set_global_default(sub).unwrap();
+        });
+        let _ = *_LOCK;
+    }
+
     use crate::{
         block::block_env_from_rpc,
         proxy::{
-            detect_account_balance_of_slot, detect_account_balance_of_slot_db,
+            BalanceSlotMatch, detect_account_balance_of_slot, detect_account_balance_of_slot_db,
             detect_balance_of_slot, detect_proxy_slot,
         },
     };
@@ -418,15 +476,7 @@ mod test {
     #[ignore]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_wlfi() {
-        let sub = tracing_subscriber::FmtSubscriber::builder()
-            .with_env_filter(
-                tracing_subscriber::EnvFilter::builder()
-                    .with_default_directive(tracing::Level::DEBUG.into())
-                    .from_env()
-                    .expect("env contains non-utf8"),
-            )
-            .finish();
-        tracing::subscriber::set_global_default(sub).unwrap();
+        setup();
         let rpc =
             std::env::var("ETH_RPC_URL").unwrap_or_else(|_| "http://10.96.179.48:8565".to_string());
         let rpc = ProviderBuilder::new().connect(&rpc).await.unwrap();
@@ -439,11 +489,11 @@ mod test {
                 .header(),
         );
         let db = CacheDB::new(WrapDatabaseAsync::new(AlloyDB::new(rpc, number.into())).unwrap());
-        let wlfi_proxy = alloy::hex::decode(include_str!(
+        let random_proxy = alloy::hex::decode(include_str!(
             "codes/0xdA5e1988097297dCdc1f90D4dFE7909e847CBeF6"
         ))
         .unwrap();
-        let proxy_slot = detect_proxy_slot(&wlfi_proxy).unwrap();
+        let proxy_slot = detect_proxy_slot(&random_proxy).unwrap();
         assert_eq!(
             B256::from_slice(&proxy_slot.to_be_bytes_vec()),
             b256!("0x360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc")
@@ -455,8 +505,9 @@ mod test {
             db,
         )
         .unwrap();
+        assert!(matches!(balanceof_slot, BalanceSlotMatch::Exact(_)));
         assert_eq!(
-            balanceof_slot,
+            balanceof_slot.best_match(),
             alloy::primitives::uint!(
                 26383648194240856301554830195144840311273963909714824038045424366773278612897_U256
             )
