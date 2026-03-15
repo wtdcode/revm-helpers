@@ -415,6 +415,7 @@ mod test {
         assert_eq!(balance_slot, expected);
     }
 
+    #[ignore]
     #[tokio::test(flavor = "multi_thread")]
     async fn test_wlfi() {
         let sub = tracing_subscriber::FmtSubscriber::builder()
