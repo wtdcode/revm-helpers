@@ -165,7 +165,7 @@ pub fn detect_account_balance_of_slot_db<DB: Database + DatabaseRef>(
     let mut rand = fast_rands::RomuDuoJrRand::new();
     let random_source_address = Address::from_word(random_b256(&mut rand));
     let mut db = LogDB::new(db);
-    let _initial_value = call_balance_of_db(
+    let initial_value = call_balance_of_db(
         &mut db,
         random_source_address,
         account,
@@ -190,7 +190,7 @@ pub fn detect_account_balance_of_slot_db<DB: Database + DatabaseRef>(
             block.clone(),
         );
 
-        if value == Some(value_set) {
+        if value.is_some() && value != Some(initial_value) {
             return Some(access.index);
         }
     }
